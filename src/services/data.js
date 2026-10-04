@@ -71,9 +71,6 @@ export async function fetchAttendanceRange(startISO, endISO) {
 
 export const ENROLLMENT_ANGLES = ['front', 'left', 'right', 'upward']
 
-/** The object path the main backend expects for a student's capture. */
-const enrollmentPath = (studentId, angle) => `${FACE_FOLDER}/${studentId}/enrollment-${angle}.jpg`
-
 export async function createStudent({ student_id, full_name, section, grade_level, teacher_id }) {
   const { data, error } = await supabase
     .from('students')
@@ -85,37 +82,6 @@ export async function createStudent({ student_id, full_name, section, grade_leve
       has_face: false,
       teacher_id: teacher_id ?? null,
     })
-    .select(STUDENT_COLUMNS)
-    .single()
-  if (error) throw error
-  return data
-}
-
-/**
- * Upload the four webcam captures to the backend's private enrollment bucket and
- * point the student row at the front one. The AI embeddings themselves are
- * computed by the main backend pipeline; the portal stores the source photos.
- */
-export async function enrollStudentFace(student, captures) {
-  if (!captures.front) throw new Error('Capture the front-facing photo before saving.')
-  const storage = supabase.storage.from(FACE_BUCKET)
-  for (const angle of ENROLLMENT_ANGLES) {
-    const blob = captures[angle]
-    if (!blob) continue
-    const { error: uploadError } = await storage.upload(enrollmentPath(student.id, angle), blob, {
-      contentType: 'image/jpeg',
-      upsert: true,
-    })
-    if (uploadError) throw uploadError
-  }
-  const { data, error } = await supabase
-    .from('students')
-    .update({
-      face_storage_path: enrollmentPath(student.id, 'front'),
-      has_face: true,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', student.id)
     .select(STUDENT_COLUMNS)
     .single()
   if (error) throw error

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import supabase from '../services/supabase'
+import { loginUser } from '../services/api'
 import { hashPassword } from '../utils/helpers'
 import { AuthContext } from './auth-context'
 
@@ -50,6 +51,18 @@ export function AuthProvider({ children }) {
       setUser(teacherUser)
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(teacherUser))
 
+      // Obtain a backend JWT so the API client can call authenticated endpoints
+      // (e.g. face enrollment). Failure is non-fatal — the portal still works
+      // for read-only operations even if the backend is temporarily unreachable.
+      try {
+        const apiResult = await loginUser({ username: identity, password })
+        if (apiResult?.access_token) {
+          localStorage.setItem('access_token', apiResult.access_token)
+        }
+      } catch {
+        // Backend login failure is intentionally silenced here.
+      }
+
       // Fire-and-forget: keep the last-login stamp fresh.
       supabase
         .from('users')
@@ -65,6 +78,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem('access_token')
     setUser(null)
   }, [])
 
