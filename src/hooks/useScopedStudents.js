@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchAllStudents } from '../services/data'
-import { studentInScope } from '../utils/helpers'
+import { fetchRoster } from '../services/data'
 import { useAuth } from '../context/useAuth'
 
-/** The roster, limited to the signed-in teacher's assigned sections. */
+/** The students registered with the signed-in teacher, and nobody else's. */
 export function useScopedStudents() {
   const { user } = useAuth()
   const [students, setStudents] = useState([])
@@ -11,12 +10,13 @@ export function useScopedStudents() {
   const [error, setError] = useState(null)
 
   const fetchStudents = useCallback(async () => {
+    if (!user?.id) {
+      setStudents([])
+      setLoading(false)
+      return
+    }
     try {
-      const all = await fetchAllStudents()
-      const scoped = all.filter((student) =>
-        studentInScope(student, user?.year_levels, user?.sections),
-      )
-      setStudents(scoped)
+      setStudents(await fetchRoster(user.id))
       setError(null)
     } catch (err) {
       setError(err)

@@ -42,6 +42,7 @@ export default function AddStudentModal({ open, onClose, onCreated }) {
         full_name: fullName,
         section: activeSection,
         grade_level: activeSection.split(' - ')[0],
+        teacher_id: user?.id,
       })
       toast.success(`${created.full_name} added to ${activeSection}.`)
       setStudentId('')

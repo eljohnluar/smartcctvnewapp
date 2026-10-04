@@ -45,15 +45,6 @@ export function assignableSections(yearLevels, letters) {
   )
 }
 
-/** Whether a student falls inside a teacher's scope (empty scope = all). */
-export function studentInScope(student, yearLevels, sections) {
-  if (!yearLevels?.length || !sections?.length) return true
-  return (
-    yearLevels.includes(student.grade_level) &&
-    sections.some((letter) => (student.section || '').endsWith(`Section ${letter}`))
-  )
-}
-
 export function formatTime(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
