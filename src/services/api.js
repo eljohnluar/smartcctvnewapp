@@ -1,14 +1,22 @@
 import axios from 'axios'
 
-const rawBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
-// Tolerate a configured base without the /api suffix (e.g. "https://backend.up.railway.app").
-const baseURL = rawBase === '/api' || rawBase.endsWith('/api') ? rawBase : `${rawBase}/api`
+const rawBase = (import.meta.env.VITE_API_BASE_URL || '/api').trim().replace(/\/+$/, '')
+// Ensure protocol is present if a domain/host was provided without http:// or https://
+const withProtocol =
+  rawBase && !rawBase.startsWith('/') && !/^https?:\/\//i.test(rawBase)
+    ? `https://${rawBase}`
+    : rawBase
+
+const baseURL =
+  withProtocol === '/api' || withProtocol.endsWith('/api')
+    ? withProtocol
+    : `${withProtocol}/api`
 
 export const API_BASE_URL = baseURL
 
 const api = axios.create({
   baseURL,
-  timeout: 15000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })
 

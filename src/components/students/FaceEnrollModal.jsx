@@ -3,7 +3,8 @@ import { Camera, Check, Lock, ScanFace, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cropToFace } from '../../utils/faceCrop'
 import { ENROLLMENT_ANGLES } from '../../services/data'
-import { enrollFace, getGestureAttendanceSettings } from '../../services/api'
+import { enrollFace, getGestureAttendanceSettings, loginUser } from '../../services/api'
+import { useAuth } from '../../context/useAuth'
 
 const ANGLE_LABELS = {
   front: 'Front',
@@ -20,6 +21,7 @@ const ANGLE_HINTS = {
 }
 
 export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) {
+  const { user } = useAuth()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const blobsRef = useRef({})
@@ -138,6 +140,16 @@ export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) 
     setSaving(true)
     setConfirmPasswordError('')
     try {
+      if (!localStorage.getItem('access_token') && user?.username) {
+        try {
+          const apiResult = await loginUser({ username: user.username, password: confirmPassword })
+          if (apiResult?.access_token) {
+            localStorage.setItem('access_token', apiResult.access_token)
+          }
+        } catch {
+          // If login fails, proceed anyway and let enrollFace surface the error
+        }
+      }
       const formData = new FormData()
       formData.append('student_id', student.id)
       for (const name of ENROLLMENT_ANGLES) {
