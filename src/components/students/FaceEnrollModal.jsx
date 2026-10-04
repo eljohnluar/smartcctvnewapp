@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera, Check, ScanFace, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { cropToFace } from '../../utils/faceCrop'
 import { ENROLLMENT_ANGLES, enrollStudentFace } from '../../services/data'
 
 const ANGLE_LABELS = {
@@ -21,10 +22,12 @@ export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const blobsRef = useRef({})
+  const boxRef = useRef(null)
   const [captures, setCaptures] = useState({})
   const [angleIndex, setAngleIndex] = useState(0)
   const [cameraError, setCameraError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [cropping, setCropping] = useState(false)
 
   const angle = ENROLLMENT_ANGLES[angleIndex]
   const complete = ENROLLMENT_ANGLES.every((name) => captures[name])
@@ -34,6 +37,7 @@ export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) 
     let cancelled = false
     setCaptures({})
     blobsRef.current = {}
+    boxRef.current = null
     setAngleIndex(0)
     setCameraError(null)
 
@@ -63,33 +67,43 @@ export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) 
     }
   }, [open, student?.id])
 
-  const handleCapture = useCallback(() => {
+  const handleCapture = useCallback(async () => {
     const video = videoRef.current
     if (!video || !video.videoWidth) {
       toast.error('The camera is not ready yet.')
       return
     }
-    const canvas = document.createElement('canvas')
+    const frame = document.createElement('canvas')
     const scale = Math.min(1, 640 / video.videoWidth)
-    canvas.width = Math.round(video.videoWidth * scale)
-    canvas.height = Math.round(video.videoHeight * scale)
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    frame.width = Math.round(video.videoWidth * scale)
+    frame.height = Math.round(video.videoHeight * scale)
+    frame.getContext('2d').drawImage(video, 0, 0, frame.width, frame.height)
 
     const currentAngle = ENROLLMENT_ANGLES[angleIndex]
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          toast.error('Capture failed. Try again.')
-          return
-        }
-        blobsRef.current = { ...blobsRef.current, [currentAngle]: blob }
-        setCaptures((prev) => ({ ...prev, [currentAngle]: canvas.toDataURL('image/jpeg', 0.8) }))
-        const nextUncaptured = ENROLLMENT_ANGLES.findIndex((name) => !blobsRef.current[name])
-        if (nextUncaptured !== -1) setAngleIndex(nextUncaptured)
-      },
-      'image/jpeg',
-      0.9,
-    )
+    setCropping(true)
+    let cropped
+    try {
+      cropped = await cropToFace(frame, boxRef.current)
+    } finally {
+      setCropping(false)
+    }
+    if (cropped.detected) {
+      boxRef.current = cropped.box
+    } else {
+      toast('No face detected, so the centre of the frame was kept. Retake it if the face is off.', {
+        id: 'face-crop-fallback',
+      })
+    }
+
+    const blob = await new Promise((resolve) => cropped.canvas.toBlob(resolve, 'image/jpeg', 0.92))
+    if (!blob) {
+      toast.error('Capture failed. Try again.')
+      return
+    }
+    blobsRef.current = { ...blobsRef.current, [currentAngle]: blob }
+    setCaptures((prev) => ({ ...prev, [currentAngle]: cropped.canvas.toDataURL('image/jpeg', 0.8) }))
+    const nextUncaptured = ENROLLMENT_ANGLES.findIndex((name) => !blobsRef.current[name])
+    if (nextUncaptured !== -1) setAngleIndex(nextUncaptured)
   }, [angleIndex])
 
   const handleSave = async () => {
@@ -191,10 +205,14 @@ export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) 
               <button
                 type="button"
                 onClick={handleCapture}
-                disabled={!!cameraError}
+                disabled={!!cameraError || cropping}
                 className="rounded-lg border border-emerald-600 px-4 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50"
               >
-                {captures[angle] ? `Retake ${ANGLE_LABELS[angle].toLowerCase()}` : `Capture ${ANGLE_LABELS[angle].toLowerCase()}`}
+                {cropping
+                  ? 'Finding face…'
+                  : captures[angle]
+                    ? `Retake ${ANGLE_LABELS[angle].toLowerCase()}`
+                    : `Capture ${ANGLE_LABELS[angle].toLowerCase()}`}
               </button>
               <button
                 type="button"
