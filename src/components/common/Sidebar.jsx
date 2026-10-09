@@ -7,12 +7,14 @@ import {
   LayoutDashboard,
   LogOut,
   Users,
+  Video,
 } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/live', label: 'Live Feed', icon: Video },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
 ]

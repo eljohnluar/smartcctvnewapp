@@ -52,20 +52,35 @@ api.interceptors.response.use(
   },
 )
 
+// Destructive actions require the signed-in account's password again.
+export const confirmHeaders = (password) => (password ? { 'X-Confirm-Password': password } : {})
+
 // ── Authentication ────────────────────────────────────────────────────────────
 export const loginUser = (data) => api.post('/auth/login', data)
 
 // ── Students ──────────────────────────────────────────────────────────────────
-
-// Destructive actions require the signed-in account's password again.
-const confirmHeaders = (password) => (password ? { 'X-Confirm-Password': password } : {})
-
 export const enrollFace = (formData, password) =>
   api.post('/students/face-enroll', formData, {
     headers: { 'Content-Type': 'multipart/form-data', ...confirmHeaders(password) },
   })
 
+// ── Attendance ────────────────────────────────────────────────────────────────
+export const getTodayAttendance = () => api.get('/attendance/today')
+export const getAttendanceByDate = (date) => api.get(`/attendance/date/${date}`)
+export const markAttendanceManual = (data) => api.post('/attendance/manual', data)
+export const resetAttendance = (password) =>
+  api.post('/attendance/reset', null, { headers: confirmHeaders(password) })
+
+// ── Camera & System ───────────────────────────────────────────────────────────
+export const getSystemStatus = () => api.get('/system/status')
+export const setAttendanceRecording = (enabled) => api.post('/camera/attendance-recording', { enabled })
+export const testVoiceAnnouncement = () => api.post('/camera/test-voice')
+
 // ── System Settings ───────────────────────────────────────────────────────────
 export const getGestureAttendanceSettings = () => api.get('/settings/gesture-attendance')
+export const getScheduleSettings = () => api.get('/settings/schedule')
+export const updateScheduleSettings = (data, password) =>
+  api.put('/settings/schedule', data, { headers: confirmHeaders(password) })
 
 export default api
+
