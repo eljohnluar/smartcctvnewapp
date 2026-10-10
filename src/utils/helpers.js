@@ -33,16 +33,14 @@ export const SECTION_LETTERS = ['A', 'B', 'C', 'D', 'E']
 export const sectionLabel = (yearLevel, letter) => `${yearLevel} - Section ${letter}`
 
 /**
- * Sections a teacher may see, from their year levels and section letters.
- * An empty result means the account is unrestricted.
+ * Sections a teacher may see, from their year levels and section names
+ * (letters, numbers, or any short label). An empty result means the account
+ * is unrestricted.
  */
-export function assignableSections(yearLevels, letters) {
-  if (!yearLevels?.length || !letters?.length) return []
-  return yearLevels.flatMap((year) =>
-    letters
-      .filter((letter) => SECTION_LETTERS.includes(letter))
-      .map((letter) => sectionLabel(year, letter)),
-  )
+export function assignableSections(yearLevels, names) {
+  if (!yearLevels?.length || !names?.length) return []
+  const cleaned = [...new Set(names.map((name) => String(name).trim()).filter(Boolean))]
+  return yearLevels.flatMap((year) => cleaned.map((name) => sectionLabel(year, name)))
 }
 
 export function formatTime(iso) {
