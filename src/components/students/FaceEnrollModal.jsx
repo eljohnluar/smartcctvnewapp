@@ -5,6 +5,7 @@ import { cropToFace } from '../../utils/faceCrop'
 import { ENROLLMENT_ANGLES } from '../../services/data'
 import { enrollFace, getGestureAttendanceSettings, loginUser } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
+import { readStoredSettings, storedCameraDeviceIdOf } from '../../utils/settings'
 
 const ANGLE_LABELS = {
   front: 'Front',
@@ -57,9 +58,14 @@ export default function FaceEnrollModal({ open, student, onClose, onEnrolled }) 
       .then((data) => setGestureRequired(Boolean(data.gesture_attendance_enabled)))
       .catch(() => setGestureRequired(false))
 
+    const preferredDeviceId = storedCameraDeviceIdOf(readStoredSettings())
+    const videoConstraints = preferredDeviceId
+      ? { deviceId: { exact: preferredDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+
     navigator.mediaDevices
       ?.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: videoConstraints,
         audio: false,
       })
       .then((stream) => {

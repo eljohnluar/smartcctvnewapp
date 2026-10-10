@@ -19,30 +19,16 @@ export function saveStoredSettings(nextSettings) {
   }
 }
 
-export const CAMERA_SOURCES = ['virtual', 'webcam', 'obs', 'rtsp']
+/**
+ * Returns preferred device camera ID, if set
+ */
+export function storedCameraDeviceIdOf(settings) {
+  return settings?.cameraDeviceId || ''
+}
 
 /**
- * Which camera the live feed shows:
- * - 'virtual': Local backend stream (AI analyzed MJPEG)
- * - 'webcam': Direct browser webcam (WebRTC/MediaDevices)
- * - 'obs': OBS Studio via bridge
- * - 'rtsp': Wired camera (RTSP stream)
+ * Returns whether device camera preview should be horizontally mirrored
  */
-export function liveFeedCameraOf(settings) {
-  const value = settings?.liveFeedCamera
-  return CAMERA_SOURCES.includes(value) ? value : 'virtual'
-}
-
-export function enrollmentCameraOf(settings) {
-  const value = settings?.enrollmentCamera
-  return CAMERA_SOURCES.includes(value) ? value : 'webcam'
-}
-
-export function cameraSourceLabel(source) {
-  return {
-    virtual: 'AI Backend Stream',
-    webcam: 'Browser Webcam',
-    obs: 'OBS Studio',
-    rtsp: 'Wired Camera (RTSP)',
-  }[source] ?? 'Camera'
+export function storedCameraFlipOf(settings) {
+  return Boolean(settings?.cameraFlipHorizontal ?? true)
 }

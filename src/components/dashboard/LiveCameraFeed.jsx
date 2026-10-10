@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  FlipHorizontal,
   Maximize2,
   Minimize2,
   Pause,
@@ -17,11 +18,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { useApp } from '../../context/AppContext'
-import { API_BASE_URL } from '../../services/api'
-import { readStoredSettings, liveFeedCameraOf, cameraSourceLabel } from '../../utils/settings'
+import {
+  readStoredSettings,
+  saveStoredSettings,
+  storedCameraDeviceIdOf,
+  storedCameraFlipOf,
+} from '../../utils/settings'
 import CheckinTimeSchedule from './CheckinTimeSchedule'
-
-const streamUrl = `${API_BASE_URL}/camera/stream`
 
 function formatTime(ts) {
   if (!ts) return 'Just now'
@@ -138,7 +141,7 @@ function FloatingAttendanceGlassModal({ records = [], isOpen, onToggle }) {
       </div>
 
       <div className="border-t border-white/10 px-5 py-2.5 text-center">
-        <p className="text-[10px] text-slate-400">Auto-updating · Live Glass View</p>
+        <p className="text-[10px] text-slate-400">Auto-updating · Live Device Camera View</p>
       </div>
     </aside>
   )
@@ -146,11 +149,10 @@ function FloatingAttendanceGlassModal({ records = [], isOpen, onToggle }) {
 
 /* ─── Fullscreen Camera Modal ────────────────────────────────────────────── */
 function FullscreenModal({
-  isWebcam,
-  sourceLabel,
   videoRef: externalVideoRef,
-  streamKey,
+  cameraLabel,
   mirrored,
+  isLive,
   failed,
   failReason,
   reconnect,
@@ -158,19 +160,17 @@ function FullscreenModal({
   attendanceRecords,
 }) {
   const modalVideoRef = useRef(null)
-  const { cameraActive, attendanceRecording, updateAttendanceRecording } = useApp()
+  const { attendanceRecording, updateAttendanceRecording } = useApp()
   const [recordingBusy, setRecordingBusy] = useState(false)
   const [showAttendanceModal, setShowAttendanceModal] = useState(true)
-  const isLive = cameraActive || (isWebcam && externalVideoRef.current?.srcObject)
 
   // Mirror the webcam stream into the fullscreen video element
   useEffect(() => {
-    if (!isWebcam) return
     const srcStream = externalVideoRef.current?.srcObject
     if (srcStream && modalVideoRef.current) {
       modalVideoRef.current.srcObject = srcStream
     }
-  }, [isWebcam, externalVideoRef])
+  }, [externalVideoRef])
 
   // Close on Escape
   useEffect(() => {
@@ -196,17 +196,17 @@ function FullscreenModal({
     <div
       className="fixed inset-0 z-[9999] flex flex-col bg-black overflow-hidden select-none"
       role="dialog"
-      aria-label="Fullscreen camera feed"
+      aria-label="Fullscreen device camera feed"
     >
       {/* Top Bar */}
       <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/45 to-transparent px-5 py-4 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300">
-            {isWebcam ? <Video size={17} /> : <Camera size={17} />}
+            <Video size={17} />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">Live camera feed</p>
-            <p className="text-[10px] text-slate-400">Main entrance · {sourceLabel}</p>
+            <p className="text-sm font-semibold text-white">Live Camera Feed</p>
+            <p className="text-[10px] text-slate-400">{cameraLabel || "Device's Camera"}</p>
           </div>
         </div>
 
@@ -218,7 +218,7 @@ function FullscreenModal({
                 : 'border-slate-600/40 text-slate-500'
             }`}
           >
-            <Radio size={11} className={isLive ? 'animate-pulse' : ''} />
+            <Radio size={11} className={isLive ? 'animate-pulse text-emerald-400' : ''} />
             {isLive ? 'Live' : 'Offline'}
           </span>
 
@@ -253,7 +253,7 @@ function FullscreenModal({
           <button
             type="button"
             onClick={reconnect}
-            aria-label="Reconnect"
+            aria-label="Restart camera"
             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
           >
             <RefreshCw size={15} />
@@ -270,31 +270,20 @@ function FullscreenModal({
         </div>
       </div>
 
-      {/* 100% Fullscreen Camera Feed Layer */}
+      {/* Fullscreen Video Layer */}
       <div className="relative flex-1 w-full h-full overflow-hidden bg-[#080d15]">
         <div className="absolute inset-0 flex items-center justify-center">
-          {isWebcam ? (
-            <video
-              ref={modalVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`h-full w-full object-contain ${failed ? 'hidden' : 'block'} ${mirrored ? '-scale-x-100' : ''}`}
-            />
-          ) : (
-            !failed && (
-              <img
-                key={streamKey}
-                src={`${streamUrl}?refresh=${streamKey}`}
-                alt="Live camera feed"
-                className="h-full w-full object-contain"
-              />
-            )
-          )}
+          <video
+            ref={modalVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`h-full w-full object-contain ${failed ? 'hidden' : 'block'} ${mirrored ? '-scale-x-100' : ''}`}
+          />
         </div>
 
         {/* HUD overlays */}
-        {!failed && (
+        {!failed && isLive && (
           <>
             <div className="absolute left-6 top-20 z-20 flex items-center gap-2 rounded-md bg-black/60 px-2.5 py-1 font-mono text-[10px] tracking-wide text-white/90 backdrop-blur-md border border-white/10">
               <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
@@ -302,7 +291,7 @@ function FullscreenModal({
               <span className="ml-1">REC 01</span>
             </div>
             <div className="absolute bottom-20 left-6 z-20 rounded-md bg-black/60 px-2.5 py-1 font-mono text-[10px] text-white/80 backdrop-blur-md border border-white/10">
-              CAM 01 · 1080P · 30FPS
+              DEVICE CAM · 720P/1080P · 30FPS
             </div>
           </>
         )}
@@ -313,9 +302,9 @@ function FullscreenModal({
             <div className="mb-1 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/80 border border-slate-700">
               <Camera size={26} className="text-slate-400" />
             </div>
-            <p className="text-base font-semibold text-slate-200">Camera feed is unavailable</p>
-            <p className="max-w-sm text-xs text-slate-400">
-              {failReason || 'Confirm the camera is running and the configured device is available.'}
+            <p className="text-base font-semibold text-slate-200">Device camera unavailable</p>
+            <p className="max-w-sm text-xs text-slate-400 px-4">
+              {failReason || 'Please verify that camera permissions are enabled in your browser.'}
             </p>
             <button
               type="button"
@@ -355,58 +344,106 @@ function FullscreenModal({
 
 /* ─── Main LiveCameraFeed Component ──────────────────────────────────────── */
 export default function LiveCameraFeed({ attendanceRecords = [] }) {
-  const [streamKey, setStreamKey] = useState(0)
   const [failed, setFailed] = useState(false)
   const [failReason, setFailReason] = useState('')
-  const { cameraActive, attendanceRecording, updateAttendanceRecording } = useApp()
   const [streamReady, setStreamReady] = useState(false)
   const [recordingBusy, setRecordingBusy] = useState(false)
-  const [stored] = useState(readStoredSettings)
   const [fullscreen, setFullscreen] = useState(false)
+
+  // Camera devices
+  const [devices, setDevices] = useState([])
+  const [selectedDeviceId, setSelectedDeviceId] = useState(() => {
+    const stored = readStoredSettings()
+    return storedCameraDeviceIdOf(stored)
+  })
+  const [mirrored, setMirrored] = useState(() => {
+    const stored = readStoredSettings()
+    return storedCameraFlipOf(stored)
+  })
+
+  const { attendanceRecording, updateAttendanceRecording } = useApp()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
 
-  const source = liveFeedCameraOf(stored)
-  const isWebcam = source === 'webcam'
-  const isBridge = source === 'obs' || source === 'rtsp'
-  const sourceLabel = cameraSourceLabel(source)
-
-  const stopWebcam = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
-  }, [])
-
-  const startWebcam = useCallback(async () => {
-    setFailed(false)
-    setFailReason('')
+  // Discover connected video input devices
+  const enumerateCameras = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
-      streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
-      setStreamReady(true)
+      if (!navigator.mediaDevices?.enumerateDevices) return
+      const allDevices = await navigator.mediaDevices.enumerateDevices()
+      const videoInputs = allDevices.filter((d) => d.kind === 'videoinput')
+      setDevices(videoInputs)
     } catch {
-      setStreamReady(false)
-      setFailReason('Browser webcam access was denied or no camera is available on this device.')
-      setFailed(true)
+      // Fallback
     }
   }, [])
+
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    setStreamReady(false)
+  }, [])
+
+  const startStream = useCallback(async () => {
+    stopStream()
+    setFailed(false)
+    setFailReason('')
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Your browser does not support webcam capture.')
+      }
+
+      const constraints = {
+        video: selectedDeviceId
+          ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      streamRef.current = stream
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+      setStreamReady(true)
+
+      // Re-enumerate devices now that camera permission has been granted (labels will be populated)
+      enumerateCameras()
+    } catch (err) {
+      setStreamReady(false)
+      setFailed(true)
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setFailReason('Camera access was denied. Please allow camera permissions in your browser.')
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setFailReason('No device camera was found. Please connect a webcam or camera device.')
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setFailReason('The camera is in use by another application. Please close it and try again.')
+      } else {
+        setFailReason(err.message || 'Unable to access the device camera.')
+      }
+    }
+  }, [selectedDeviceId, stopStream, enumerateCameras])
 
   useEffect(() => {
-    if (!isWebcam) return undefined
-    startWebcam()
-    return stopWebcam
-  }, [isWebcam, startWebcam, stopWebcam])
+    startStream()
+    return stopStream
+  }, [startStream, stopStream])
 
-  const reconnect = () => {
-    setStreamReady(false)
-    if (isWebcam) {
-      stopWebcam()
-      startWebcam()
-      return
-    }
-    setFailed(false)
-    setFailReason('')
-    setStreamKey((key) => key + 1)
+  const handleDeviceChange = (deviceId) => {
+    setSelectedDeviceId(deviceId)
+    saveStoredSettings({ cameraDeviceId: deviceId })
+  }
+
+  const toggleMirror = () => {
+    const next = !mirrored
+    setMirrored(next)
+    saveStoredSettings({ cameraFlipHorizontal: next })
   }
 
   const toggleAttendanceRecording = async () => {
@@ -420,29 +457,46 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
     }
   }
 
-  const cameraReady = cameraActive || streamReady
-  const isLive = cameraActive || (isWebcam && streamReady)
-  const mirrored = Boolean(stored.cameraFlipHorizontal)
+  // Active camera label
+  const activeDevice = devices.find((d) => d.deviceId === selectedDeviceId)
+  const cameraLabel = activeDevice?.label || "Device's Camera"
+  const isLive = streamReady && !failed
 
   return (
     <>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-              {isWebcam ? <Video size={17} /> : <Camera size={17} />}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              <Video size={17} />
             </div>
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Live camera feed</h2>
-              <p className="text-[11px] text-slate-400">Main entrance · {sourceLabel}</p>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-slate-900 truncate">Device Camera Feed</h2>
+              <p className="text-[11px] text-slate-400 truncate">{cameraLabel}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Camera device picker if multiple devices exist */}
+            {devices.length > 1 && (
+              <select
+                value={selectedDeviceId}
+                onChange={(e) => handleDeviceChange(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                aria-label="Select camera device"
+              >
+                {devices.map((d, index) => (
+                  <option key={d.deviceId || index} value={d.deviceId}>
+                    {d.label || `Camera ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            )}
+
             {/* Live/offline badge */}
             <span
-              className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                 isLive
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                   : 'border-slate-200 bg-slate-50 text-slate-400'
@@ -456,7 +510,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
             <button
               type="button"
               onClick={toggleAttendanceRecording}
-              disabled={!cameraReady || recordingBusy}
+              disabled={!isLive || recordingBusy}
               title={attendanceRecording ? 'Pause attendance recording' : 'Start attendance recording'}
               className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 attendanceRecording
@@ -468,11 +522,27 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
               {attendanceRecording ? 'Pause' : 'Record'}
             </button>
 
+            {/* Flip / mirror toggle */}
+            <button
+              type="button"
+              onClick={toggleMirror}
+              title={mirrored ? 'Mirroring enabled (click to unflip)' : 'Mirroring disabled (click to flip)'}
+              aria-label="Flip camera view"
+              className={`rounded-lg p-2 transition-colors ${
+                mirrored
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+              }`}
+            >
+              <FlipHorizontal size={15} />
+            </button>
+
             {/* Reconnect */}
             <button
               type="button"
-              onClick={reconnect}
-              aria-label="Reconnect camera stream"
+              onClick={startStream}
+              aria-label="Restart camera"
+              title="Restart camera"
               className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             >
               <RefreshCw size={15} />
@@ -491,35 +561,19 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
           </div>
         </div>
 
-        {/* Video area */}
-        <div className="relative aspect-video overflow-hidden bg-slate-900 xl:aspect-[16/8]">
-          {isWebcam ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              onPlay={() => setStreamReady(true)}
-              className={`h-full w-full object-cover ${failed ? 'hidden' : 'block'} ${mirrored ? '-scale-x-100' : ''}`}
-            />
-          ) : (
-            !failed && (
-              <img
-                key={streamKey}
-                src={`${streamUrl}?refresh=${streamKey}`}
-                alt="Live camera feed"
-                onLoad={() => setStreamReady(true)}
-                onError={() => {
-                  setFailReason('')
-                  setFailed(true)
-                }}
-                className="h-full w-full object-cover"
-              />
-            )
-          )}
+        {/* Video Display Area */}
+        <div className="relative aspect-video overflow-hidden bg-slate-950 xl:aspect-[16/8]">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            onPlay={() => setStreamReady(true)}
+            className={`h-full w-full object-cover ${failed ? 'hidden' : 'block'} ${mirrored ? '-scale-x-100' : ''}`}
+          />
 
           {/* HUD overlays */}
-          {!failed && (
+          {!failed && isLive && (
             <>
               <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/40 to-transparent" />
               <div className="absolute left-4 top-3 flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1 font-mono text-[10px] tracking-wide text-white/85 backdrop-blur-sm">
@@ -527,7 +581,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
                 REC 01
               </div>
               <div className="absolute bottom-4 left-4 rounded-md bg-black/45 px-2 py-1 font-mono text-[10px] text-white/75 backdrop-blur-sm">
-                CAM 01 · 1080P
+                DEVICE CAM · {mirrored ? 'MIRRORED' : 'NORMAL'}
               </div>
               <button
                 type="button"
@@ -540,25 +594,22 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
             </>
           )}
 
-          {/* Error / offline state */}
+          {/* Error / Offline state */}
           {failed && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center p-6">
               <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800">
                 <Camera size={23} className="text-slate-400" />
               </div>
-              <p className="text-sm font-medium text-slate-200">Camera feed unavailable</p>
-              <p className="max-w-xs text-xs text-slate-400 px-4">
-                {failReason ||
-                  (isBridge
-                    ? 'Start the local bridge script on the camera computer and confirm it is connected.'
-                    : 'Confirm the backend is running and the camera device is accessible.')}
+              <p className="text-sm font-medium text-slate-200">Device camera unavailable</p>
+              <p className="max-w-sm text-xs text-slate-400">
+                {failReason || 'Please allow browser access to the device camera to view the live feed.'}
               </p>
               <button
                 type="button"
-                onClick={reconnect}
-                className="mt-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                onClick={startStream}
+                className="mt-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
               >
-                Try reconnecting
+                Allow &amp; Connect Camera
               </button>
             </div>
           )}
@@ -568,14 +619,13 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
       {/* Fullscreen portal */}
       {fullscreen && (
         <FullscreenModal
-          isWebcam={isWebcam}
-          sourceLabel={sourceLabel}
           videoRef={videoRef}
-          streamKey={streamKey}
+          cameraLabel={cameraLabel}
           mirrored={mirrored}
+          isLive={isLive}
           failed={failed}
           failReason={failReason}
-          reconnect={reconnect}
+          reconnect={startStream}
           onClose={() => setFullscreen(false)}
           attendanceRecords={attendanceRecords}
         />
