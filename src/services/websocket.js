@@ -109,8 +109,10 @@ class WSClient {
 
   _isVisible(data) {
     const tracked = data.type === 'attendance' || data.type === 'attendance_time_out'
-    if (!tracked || this.sectionScope === null) return true
-    return this.sectionScope.includes(data.record?.section ?? data.section)
+    if (!tracked || this.sectionScope === null || !this.sectionScope.length) return true
+    const sec = data.record?.section ?? data.section
+    if (!sec) return true
+    return this.sectionScope.some((s) => s === sec || s.includes(sec) || sec.includes(s))
   }
 
   on(event, callback) {

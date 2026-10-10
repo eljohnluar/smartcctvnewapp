@@ -89,3 +89,71 @@ export function initials(fullName) {
     .map((part) => part[0]?.toUpperCase())
     .join('')
 }
+
+export function statusLabel(status) {
+  if (status === 'present') return 'Time in'
+  if (status === 'late') return 'Late'
+  if (status === 'time_out') return 'Time out'
+  if (status === 'absent') return 'Absent'
+  return status || '—'
+}
+
+export function statusColors(status) {
+  switch (status) {
+    case 'present':
+      return {
+        bg: 'bg-green-500/10',
+        text: 'text-green-400',
+        border: 'border-green-500/30',
+        dot: 'bg-green-400',
+      }
+    case 'late':
+      return {
+        bg: 'bg-amber-500/10',
+        text: 'text-amber-400',
+        border: 'border-amber-500/30',
+        dot: 'bg-amber-400',
+      }
+    case 'time_out':
+      return {
+        bg: 'bg-rose-500/10',
+        text: 'text-rose-400',
+        border: 'border-rose-500/30',
+        dot: 'bg-rose-400',
+      }
+    default:
+      return {
+        bg: 'bg-slate-500/10',
+        text: 'text-slate-400',
+        border: 'border-slate-500/30',
+        dot: 'bg-slate-400',
+      }
+  }
+}
+
+
+export const toPercent = (value, total, decimals = 1) => {
+  if (!total || total === 0) return '0%'
+  return `${((value / total) * 100).toFixed(decimals)}%`
+}
+
+export const debounce = (fn, delay = 300) => {
+  let timer
+  return (...args) => {
+    clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), delay)
+  }
+}
+
+export const formatConfidence = (score) => {
+  if (score === null || score === undefined) return '—'
+  return `${(score * 100).toFixed(1)}%`
+}
+
+export const todayLabel = () =>
+  new Date().toLocaleDateString('en-PH', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })

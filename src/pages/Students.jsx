@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, ScanFace, Search, UserPlus, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Printer, ScanFace, Search, UserPlus, Users } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useScopedStudents } from '../hooks/useScopedStudents'
+import { usePasswordConfirm } from '../hooks/usePasswordConfirm'
+import { resetStudentFace } from '../services/api'
 import { formatDate, initials } from '../utils/helpers'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import AddStudentModal from '../components/students/AddStudentModal'
@@ -16,6 +19,22 @@ export default function Students() {
   const [page, setPage] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const [enrollTarget, setEnrollTarget] = useState(null)
+  const { confirm, dialog } = usePasswordConfirm()
+
+  const handleResetFace = (student) => {
+    confirm(
+      async (password) => {
+        await resetStudentFace(student.id, password)
+        toast.success(`Face enrollment reset for ${student.full_name}`)
+        refetch()
+      },
+      {
+        title: 'Reset Face Enrollment',
+        description: `Are you sure you want to remove enrolled face data for ${student.full_name}? The student will need to be re-enrolled to be recognized.`,
+        confirmLabel: 'Reset Face',
+      },
+    )
+  }
 
   const yearLevels = useMemo(
     () => [...new Set(students.map((student) => student.grade_level).filter(Boolean))].sort(),
@@ -53,14 +72,24 @@ export default function Students() {
         <p className="text-xs text-slate-500">
           {loading ? 'Loading roster…' : `${students.length} students in your sections`}
         </p>
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-        >
-          <UserPlus size={14} />
-          Add student
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="no-print flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+          >
+            <Printer size={14} />
+            Print
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            <UserPlus size={14} />
+            Add student
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -113,6 +142,7 @@ export default function Students() {
       </div>
 
       {/* Table */}
+      <div className="print-area">
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -184,10 +214,19 @@ export default function Students() {
                         <button
                           type="button"
                           onClick={() => setEnrollTarget(student)}
-                          className="text-[11px] font-medium text-emerald-600 hover:underline"
+                          className="no-print text-[11px] font-medium text-emerald-600 hover:underline"
                         >
                           {student.has_face ? 'Retake' : 'Enroll'}
                         </button>
+                        {student.has_face && (
+                          <button
+                            type="button"
+                            onClick={() => handleResetFace(student)}
+                            className="no-print text-[11px] font-medium text-rose-500 hover:underline"
+                          >
+                            Reset
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td className="px-5 py-3 text-xs text-slate-500">{formatDate(student.created_at)}</td>
@@ -200,7 +239,7 @@ export default function Students() {
 
         {/* Pagination */}
         {!loading && pageCount > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+          <div className="no-print flex items-center justify-between border-t border-slate-100 px-5 py-3">
             <span className="text-xs text-slate-400">
               Page {safePage + 1} of {pageCount}
             </span>
@@ -227,6 +266,7 @@ export default function Students() {
           </div>
         )}
       </div>
+      </div>
       <AddStudentModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={refetch} />
       <FaceEnrollModal
         open={!!enrollTarget}
@@ -234,6 +274,7 @@ export default function Students() {
         onClose={() => setEnrollTarget(null)}
         onEnrolled={refetch}
       />
+      {dialog}
     </div>
   )
 }

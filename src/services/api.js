@@ -57,12 +57,18 @@ export const confirmHeaders = (password) => (password ? { 'X-Confirm-Password': 
 
 // ── Authentication ────────────────────────────────────────────────────────────
 export const loginUser = (data) => api.post('/auth/login', data)
+export const registerAccount = (data) => api.post('/auth/register', data)
+export const getCurrentAccount = () => api.get('/auth/me')
 
 // ── Students ──────────────────────────────────────────────────────────────────
 export const enrollFace = (formData, password) =>
   api.post('/students/face-enroll', formData, {
     headers: { 'Content-Type': 'multipart/form-data', ...confirmHeaders(password) },
   })
+export const resetStudentFace = (studentId, password) =>
+  api.delete(`/students/${studentId}/face`, { headers: confirmHeaders(password) })
+export const resetAllFaceEnrollments = (password) =>
+  api.post('/students/reset-enrollments', null, { headers: confirmHeaders(password) })
 
 // ── Attendance ────────────────────────────────────────────────────────────────
 export const getTodayAttendance = () => api.get('/attendance/today')
@@ -75,6 +81,13 @@ export const resetAttendance = (password) =>
 export const getSystemStatus = () => api.get('/system/status')
 export const setAttendanceRecording = (enabled) => api.post('/camera/attendance-recording', { enabled })
 export const testVoiceAnnouncement = () => api.post('/camera/test-voice')
+export const processFrame = (blob) => {
+  const formData = new FormData()
+  formData.append('file', blob, 'frame.jpg')
+  return api.post('/camera/process-frame', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
 
 // ── System Settings ───────────────────────────────────────────────────────────
 export const getUniformPolicy = () => api.get('/settings/uniform-policy')
@@ -103,3 +116,22 @@ export const getAdminSummary = () => api.get('/admin/summary')
 
 export default api
 
+
+// ── Administrator console ─────────────────────────────────────────────────────
+export const createTeacherAccount = (data) => api.post('/admin/teachers', data)
+export const updateTeacherAccount = (id, data, password) =>
+  api.put(`/admin/teachers/${id}`, data, { headers: confirmHeaders(password) })
+export const deleteTeacherAccount = (id, password) =>
+  api.delete(`/admin/teachers/${id}`, { headers: confirmHeaders(password) })
+export const getAttendanceOverview = (params) => api.get('/admin/attendance', { params })
+export const getAuditLog = (params) => api.get('/admin/audit-log', { params })
+export const clearAuditLog = (password) =>
+  api.delete('/admin/audit-log', { headers: confirmHeaders(password) })
+
+export const getStudents = (params) => api.get('/students', { params })
+export const getStudentById = (id) => api.get(`/students/${id}`)
+export const createStudent = (data, password) =>
+  api.post('/students', data, { headers: confirmHeaders(password) })
+export const updateStudent = (id, data) => api.put(`/students/${id}`, data)
+export const deleteStudent = (id, password) =>
+  api.delete(`/students/${id}`, { headers: confirmHeaders(password) })

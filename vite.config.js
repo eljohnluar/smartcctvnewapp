@@ -14,6 +14,14 @@ export default defineConfig({
       '/ws': {
         target: 'ws://localhost:8000',
         ws: true,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            // Suppress harmless ECONNABORTED errors from browser disconnect
+            if (err.code !== 'ECONNABORTED') {
+              console.error('[ws proxy error]', err)
+            }
+          })
+        },
       },
     },
   },

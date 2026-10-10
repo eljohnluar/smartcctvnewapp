@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Camera,
   Check,
@@ -559,7 +560,17 @@ export default function Settings() {
           <AIStatusIndicator />
 
           {/* Action Bar */}
-          <div className="flex items-center justify-end rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <Link
+              to="/credits"
+              className="group inline-flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-emerald-600"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-300 transition-colors group-hover:bg-emerald-500" />
+              <span className="underline underline-offset-4 decoration-slate-200 transition-colors group-hover:decoration-emerald-400">
+                Credits
+              </span>
+            </Link>
+
             <button
               type="submit"
               disabled={saving}

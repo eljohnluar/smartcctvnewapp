@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   BarChart3,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   GraduationCap,
@@ -15,6 +16,7 @@ import { useAuth } from '../../context/useAuth'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/live', label: 'Live Feed', icon: Video },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
@@ -54,7 +56,7 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-300 md:static md:translate-x-0 md:transition-all ${
+        className={`no-print fixed inset-y-0 left-0 z-50 flex h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-300 md:static md:translate-x-0 md:transition-all ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${collapsed ? 'md:w-16' : 'md:w-60'}`}
       >
@@ -66,7 +68,7 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
           {showLabels && (
             <div className="overflow-hidden">
               <p className="whitespace-nowrap text-sm font-bold leading-tight text-slate-900">
-                SmartCCTV
+                SmartCamera
               </p>
               <p className="whitespace-nowrap text-[11px] font-medium text-slate-500">
                 {user?.role === 'admin' ? 'Administrator portal' : 'Teacher portal'}

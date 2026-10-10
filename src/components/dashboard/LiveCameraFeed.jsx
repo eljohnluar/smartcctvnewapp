@@ -12,12 +12,12 @@ import {
   RefreshCw,
   Users,
   Video,
-  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { useApp } from '../../context/AppContext'
+import { processFrame } from '../../services/api'
 import {
   readStoredSettings,
   saveStoredSettings,
@@ -29,6 +29,106 @@ import CheckinTimeSchedule from './CheckinTimeSchedule'
 function formatTime(ts) {
   if (!ts) return 'Just now'
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(ts))
+}
+
+/* ─── Biometric Face Overlay Renderer ────────────────────────────────────── */
+function renderBiometricOverlay(canvas, video, detectionsData, fitMode, mirrored) {
+  if (!canvas) return
+  const displayW = canvas.clientWidth
+  const displayH = canvas.clientHeight
+  if (!displayW || !displayH) return
+
+  if (canvas.width !== displayW || canvas.height !== displayH) {
+    canvas.width = displayW
+    canvas.height = displayH
+  }
+
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, displayW, displayH)
+
+  if (!detectionsData || !detectionsData.detections || detectionsData.detections.length === 0) {
+    return
+  }
+
+  const now = Date.now()
+  const age = now - (detectionsData.timestamp || 0)
+  // Decay after 2.4s if no fresh detection frame arrived
+  if (age > 2400) return
+  const alpha = age > 1800 ? Math.max(0, 1 - (age - 1800) / 600) : 1
+
+  const fw = detectionsData.frameWidth || 640
+  const fh = detectionsData.frameHeight || 360
+
+  const scale = fitMode === 'contain'
+    ? Math.min(displayW / fw, displayH / fh)
+    : Math.max(displayW / fw, displayH / fh)
+
+  const rw = fw * scale
+  const rh = fh * scale
+  const ox = (displayW - rw) / 2
+  const oy = (displayH - rh) / 2
+
+  detectionsData.detections.forEach((detection) => {
+    const box = detection.box || detection
+    if (!Array.isArray(box) || box.length < 4) return
+    const [bx, by, bw, bh] = box
+
+    let x = ox + bx * scale
+    const y = oy + by * scale
+    const w = bw * scale
+    const h = bh * scale
+
+    if (mirrored) {
+      x = displayW - (x + w)
+    }
+
+    const labelRaw = String(detection.label || 'UNKNOWN').trim()
+    const isUnknown =
+      !labelRaw ||
+      /^unknown/i.test(labelRaw) ||
+      /not enrolled/i.test(labelRaw) ||
+      /unregistered/i.test(labelRaw)
+    const isGestureNeeded = labelRaw.includes('SHOW PALM')
+    const gestureDetected = Boolean(detectionsData.gestureDetected)
+
+    let accentColor = '#10b981' // emerald-500, enrolled student
+    let labelTextColor = '#06281a'
+    if (isUnknown) {
+      accentColor = '#ef4444' // red-500, unknown face
+      labelTextColor = '#ffffff'
+    } else if (isGestureNeeded && !gestureDetected) {
+      accentColor = '#f59e0b' // amber-500, waiting for palm gesture
+      labelTextColor = '#3a2503'
+    }
+
+    ctx.save()
+    ctx.globalAlpha = alpha
+
+    // Simple 2px bounding box, like the smartcctvapp stream overlays
+    ctx.lineWidth = 2
+    ctx.strokeStyle = accentColor
+    ctx.strokeRect(x, y, w, h)
+
+    let title = labelRaw
+    if (isUnknown) {
+      title = 'UNREGISTERED'
+    } else {
+      title = labelRaw.replace(/\s*\d+\s*%/, '').replace(/\s*·?\s*SHOW PALM.*/i, '').trim() || labelRaw
+    }
+
+    // Flat filled label chip sitting on the box's top edge
+    ctx.font = 'bold 11px system-ui, -apple-system, sans-serif'
+    const textWidth = ctx.measureText(title).width
+    const chipW = textWidth + 12
+    const chipH = 18
+    const chipY = Math.max(0, y - chipH)
+    ctx.fillStyle = accentColor
+    ctx.fillRect(x, chipY, chipW, chipH)
+    ctx.fillStyle = labelTextColor
+    ctx.fillText(title, x + 6, chipY + chipH - 5)
+
+    ctx.restore()
+  })
 }
 
 /* ─── Floating Attendance Glass Modal (overlaid on the fullscreen view) ─── */
@@ -150,7 +250,6 @@ function FloatingAttendanceGlassModal({ records = [], isOpen, onToggle }) {
 /* ─── Fullscreen Camera Modal ────────────────────────────────────────────── */
 function FullscreenModal({
   videoRef: externalVideoRef,
-  cameraLabel,
   mirrored,
   isLive,
   failed,
@@ -158,11 +257,11 @@ function FullscreenModal({
   reconnect,
   onClose,
   attendanceRecords,
+  detectionsRef,
 }) {
   const modalVideoRef = useRef(null)
-  const { attendanceRecording, updateAttendanceRecording } = useApp()
-  const [recordingBusy, setRecordingBusy] = useState(false)
-  const [showAttendanceModal, setShowAttendanceModal] = useState(true)
+  const modalOverlayCanvasRef = useRef(null)
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false)
 
   // Mirror the webcam stream into the fullscreen video element
   useEffect(() => {
@@ -171,6 +270,25 @@ function FullscreenModal({
       modalVideoRef.current.srcObject = srcStream
     }
   }, [externalVideoRef])
+
+  // Real-time 60 FPS biometric face overlay loop for fullscreen view
+  useEffect(() => {
+    let animId
+    const loop = () => {
+      if (modalOverlayCanvasRef.current && modalVideoRef.current && detectionsRef?.current) {
+        renderBiometricOverlay(
+          modalOverlayCanvasRef.current,
+          modalVideoRef.current,
+          detectionsRef.current,
+          'contain',
+          mirrored,
+        )
+      }
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(animId)
+  }, [mirrored, detectionsRef])
 
   // Close on Escape
   useEffect(() => {
@@ -181,17 +299,6 @@ function FullscreenModal({
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const toggleAttendanceRecording = async () => {
-    setRecordingBusy(true)
-    try {
-      await updateAttendanceRecording(!attendanceRecording)
-    } catch (error) {
-      toast.error(error.message || 'Could not change attendance recording state')
-    } finally {
-      setRecordingBusy(false)
-    }
-  }
-
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex flex-col bg-black overflow-hidden select-none"
@@ -199,17 +306,7 @@ function FullscreenModal({
       aria-label="Fullscreen device camera feed"
     >
       {/* Top Bar */}
-      <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/45 to-transparent px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300">
-            <Video size={17} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white">Live Camera Feed</p>
-            <p className="text-[10px] text-slate-400">{cameraLabel || "Device's Camera"}</p>
-          </div>
-        </div>
-
+      <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-end bg-gradient-to-b from-black/85 via-black/45 to-transparent px-5 py-4 sm:px-6">
         <div className="flex items-center gap-2">
           <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
@@ -238,34 +335,10 @@ function FullscreenModal({
 
           <button
             type="button"
-            onClick={toggleAttendanceRecording}
-            disabled={recordingBusy}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              attendanceRecording
-                ? 'bg-red-400/10 text-red-300 hover:bg-red-400/20'
-                : 'bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20'
-            }`}
-          >
-            {attendanceRecording ? <Pause size={12} /> : <Play size={12} />}
-            {attendanceRecording ? 'Pause attendance' : 'Record attendance'}
-          </button>
-
-          <button
-            type="button"
-            onClick={reconnect}
-            aria-label="Restart camera"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <RefreshCw size={15} />
-          </button>
-
-          <button
-            type="button"
             onClick={onClose}
-            aria-label="Exit fullscreen"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white/90 backdrop-blur-md transition-all hover:bg-white/20 active:scale-95 shadow-lg"
           >
-            <X size={18} />
+            <Minimize2 size={13} /> Exit fullscreen
           </button>
         </div>
       </div>
@@ -280,12 +353,16 @@ function FullscreenModal({
             muted
             className={`h-full w-full object-contain ${failed ? 'hidden' : 'block'} ${mirrored ? '-scale-x-100' : ''}`}
           />
+          <canvas
+            ref={modalOverlayCanvasRef}
+            className={`pointer-events-none absolute inset-0 h-full w-full ${failed ? 'hidden' : 'block'}`}
+          />
         </div>
 
         {/* HUD overlays */}
         {!failed && isLive && (
           <>
-            <div className="absolute left-6 top-20 z-20 flex items-center gap-2 rounded-md bg-black/60 px-2.5 py-1 font-mono text-[10px] tracking-wide text-white/90 backdrop-blur-md border border-white/10">
+            <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-md bg-black/60 px-2.5 py-1 font-mono text-[10px] tracking-wide text-white/90 backdrop-blur-md border border-white/10 sm:left-6 sm:top-20">
               <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
               <span className="h-2 w-2 rounded-full bg-red-400 absolute" />
               <span className="ml-1">REC 01</span>
@@ -329,13 +406,6 @@ function FullscreenModal({
         <div className="pointer-events-auto mx-auto w-full max-w-2xl">
           <CheckinTimeSchedule overlay />
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white/90 backdrop-blur-md transition-all hover:bg-white/20 active:scale-95 shadow-lg"
-        >
-          <Minimize2 size={13} /> Exit fullscreen
-        </button>
       </div>
     </div>,
     document.body,
@@ -349,6 +419,17 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
   const [streamReady, setStreamReady] = useState(false)
   const [recordingBusy, setRecordingBusy] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [faceCount, setFaceCount] = useState(0)
+
+  // Biometric active detections ref (shared with 60 FPS canvas renderers)
+  const activeDetectionsRef = useRef({
+    detections: [],
+    frameWidth: 640,
+    frameHeight: 360,
+    timestamp: 0,
+    gestureDetected: false,
+  })
+  const overlayCanvasRef = useRef(null)
 
   // Camera devices
   const [devices, setDevices] = useState([])
@@ -364,6 +445,25 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
   const { attendanceRecording, updateAttendanceRecording } = useApp()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
+
+  // 60 FPS biometric face overlay loop for card view
+  useEffect(() => {
+    let animId
+    const loop = () => {
+      if (overlayCanvasRef.current && videoRef.current) {
+        renderBiometricOverlay(
+          overlayCanvasRef.current,
+          videoRef.current,
+          activeDetectionsRef.current,
+          'cover',
+          mirrored,
+        )
+      }
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(animId)
+  }, [mirrored])
 
   // Discover connected video input devices
   const enumerateCameras = useCallback(async () => {
@@ -435,6 +535,83 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
     return stopStream
   }, [startStream, stopStream])
 
+  // Continuously analyze device camera frames for AI face recognition when live
+  const isScanningRef = useRef(false)
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    if (!streamReady || failed) return undefined
+
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement('canvas')
+    }
+    const canvas = canvasRef.current
+
+    const interval = setInterval(() => {
+      const video = videoRef.current
+      if (!video || !video.videoWidth || video.paused || video.ended || isScanningRef.current) {
+        return
+      }
+
+      // Avoid background tab scanning to conserve cloud compute
+      if (typeof document !== 'undefined' && document.hidden) {
+        return
+      }
+
+      try {
+        isScanningRef.current = true
+        const scale = Math.min(1, 640 / video.videoWidth)
+        canvas.width = Math.round(video.videoWidth * scale)
+        canvas.height = Math.round(video.videoHeight * scale)
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        canvas.toBlob(
+          async (blob) => {
+            if (blob) {
+              try {
+                const res = await processFrame(blob)
+                if (res && res.success) {
+                  const detections = res.detections || (res.boxes || []).map((b, i) => ({
+                    box: b,
+                    label: res.labels?.[i] || 'UNKNOWN',
+                  }))
+                  activeDetectionsRef.current = {
+                    detections,
+                    frameWidth: res.frame_width || canvas.width,
+                    frameHeight: res.frame_height || canvas.height,
+                    timestamp: Date.now(),
+                    gestureDetected: Boolean(res.gesture_detected),
+                  }
+                  setFaceCount(detections.length)
+                }
+              } catch {
+                // Ignore transient network errors or offline server sleep
+              }
+            }
+            isScanningRef.current = false
+          },
+          'image/jpeg',
+          0.80,
+        )
+      } catch {
+        isScanningRef.current = false
+      }
+    }, 1100)
+
+    const countDecay = setInterval(() => {
+      if (Date.now() - (activeDetectionsRef.current.timestamp || 0) > 2500) {
+        setFaceCount(0)
+      }
+    }, 1000)
+
+    return () => {
+      clearInterval(interval)
+      clearInterval(countDecay)
+      isScanningRef.current = false
+    }
+  }, [streamReady, failed])
+
   const handleDeviceChange = (deviceId) => {
     setSelectedDeviceId(deviceId)
     saveStoredSettings({ cameraDeviceId: deviceId })
@@ -483,7 +660,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
               <select
                 value={selectedDeviceId}
                 onChange={(e) => handleDeviceChange(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="hidden rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:block"
                 aria-label="Select camera device"
               >
                 {devices.map((d, index) => (
@@ -571,6 +748,10 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
             onPlay={() => setStreamReady(true)}
             className={`h-full w-full object-cover ${failed ? 'hidden' : 'block'} ${mirrored ? '-scale-x-100' : ''}`}
           />
+          <canvas
+            ref={overlayCanvasRef}
+            className={`pointer-events-none absolute inset-0 h-full w-full ${failed ? 'hidden' : 'block'}`}
+          />
 
           {/* HUD overlays */}
           {!failed && isLive && (
@@ -580,6 +761,12 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
                 <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
                 REC 01
               </div>
+              {faceCount > 0 && (
+                <div className="absolute left-24 top-3 flex items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-950/70 px-2 py-1 font-mono text-[10px] font-semibold text-emerald-300 backdrop-blur-sm shadow-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  {faceCount} {faceCount === 1 ? 'FACE' : 'FACES'} DETECTED
+                </div>
+              )}
               <div className="absolute bottom-4 left-4 rounded-md bg-black/45 px-2 py-1 font-mono text-[10px] text-white/75 backdrop-blur-sm">
                 DEVICE CAM · {mirrored ? 'MIRRORED' : 'NORMAL'}
               </div>
@@ -620,7 +807,6 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
       {fullscreen && (
         <FullscreenModal
           videoRef={videoRef}
-          cameraLabel={cameraLabel}
           mirrored={mirrored}
           isLive={isLive}
           failed={failed}
@@ -628,6 +814,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
           reconnect={startStream}
           onClose={() => setFullscreen(false)}
           attendanceRecords={attendanceRecords}
+          detectionsRef={activeDetectionsRef}
         />
       )}
     </>

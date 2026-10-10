@@ -6,7 +6,7 @@ import { wsClient } from '../services/websocket'
 
 function normalizeRecord(r) {
   return {
-    id: r.id,
+    id: r.id || `${r.student_id}-${r.check_in_time || Date.now()}`,
     student_id: r.student_id,
     student_name: r.student_name || r.students?.full_name || `Student #${r.student_id}`,
     student_code: r.student_code || r.students?.student_id || '',

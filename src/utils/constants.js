@@ -44,3 +44,7 @@ export const CONFIDENCE_THRESHOLDS = {
   MEDIUM: 0.75,
   LOW: 0.0,
 }
+
+export function yearLevelOfSection(section) {
+  return YEAR_LEVELS.find((year) => (section || '').startsWith(year)) ?? ''
+}

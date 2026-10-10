@@ -50,12 +50,9 @@ export function AuthProvider({ children }) {
         year_levels: data.year_levels ?? [],
         sections: data.sections ?? [],
       }
-      setUser(teacherUser)
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(teacherUser))
 
-      // Obtain a backend JWT so the API client can call authenticated endpoints
-      // (e.g. face enrollment). Failure is non-fatal — the portal still works
-      // for read-only operations even if the backend is temporarily unreachable.
+      // Obtain a backend JWT before publishing the user state — admin pages
+      // fetch on mount and would otherwise race an unauthenticated token.
       try {
         const apiResult = await loginUser({ username: identity, password })
         if (apiResult?.access_token) {
@@ -64,6 +61,9 @@ export function AuthProvider({ children }) {
       } catch {
         // Backend login failure is intentionally silenced here.
       }
+
+      setUser(teacherUser)
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(teacherUser))
 
       // Fire-and-forget: keep the last-login stamp fresh.
       supabase

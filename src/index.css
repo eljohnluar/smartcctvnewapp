@@ -45,3 +45,36 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  #root,
+  #root * {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+  /* When a page marks a print area (e.g. Attendance), print only that area. */
+  body:has(.print-area) * {
+    visibility: hidden;
+  }
+  body:has(.print-area) .print-area,
+  body:has(.print-area) .print-area * {
+    visibility: visible;
+  }
+  body:has(.print-area) .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  body:has(.print-area) .print-area > * {
+    border: none;
+    box-shadow: none;
+  }
+}
