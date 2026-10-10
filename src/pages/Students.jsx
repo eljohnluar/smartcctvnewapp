@@ -182,17 +182,9 @@ export default function Students() {
                   <tr key={student.id} className="transition-colors hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        {student.photo_url ? (
-                          <img
-                            src={student.photo_url}
-                            alt=""
-                            className="h-9 w-9 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-bold text-emerald-700">
-                            {initials(student.full_name)}
-                          </div>
-                        )}
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-bold text-emerald-700">
+                          {initials(student.full_name)}
+                        </div>
                         <span className="font-medium text-slate-900">{student.full_name}</span>
                       </div>
                     </td>

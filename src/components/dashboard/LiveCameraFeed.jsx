@@ -10,6 +10,7 @@ import {
   Play,
   Radio,
   RefreshCw,
+  SwitchCamera,
   Users,
   Video,
 } from 'lucide-react'
@@ -256,6 +257,9 @@ function FullscreenModal({
   failReason,
   reconnect,
   onClose,
+  facing,
+  onToggleFacing,
+  streamNonce,
   attendanceRecords,
   detectionsRef,
 }) {
@@ -269,7 +273,7 @@ function FullscreenModal({
     if (srcStream && modalVideoRef.current) {
       modalVideoRef.current.srcObject = srcStream
     }
-  }, [externalVideoRef])
+  }, [externalVideoRef, streamNonce])
 
   // Real-time 60 FPS biometric face overlay loop for fullscreen view
   useEffect(() => {
@@ -331,6 +335,17 @@ function FullscreenModal({
           >
             <Users size={12} />
             <span>Attendance Log</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggleFacing}
+            title={facing === 'user' ? 'Using front camera (click for back)' : 'Using back camera (click for front)'}
+            aria-label="Switch between front and back camera"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-slate-300 transition-colors hover:bg-white/15"
+          >
+            <SwitchCamera size={12} />
+            {facing === 'user' ? 'Front' : 'Back'}
           </button>
 
           <button
@@ -441,6 +456,8 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
     const stored = readStoredSettings()
     return storedCameraFlipOf(stored)
   })
+  const [facing, setFacing] = useState('user')
+  const [streamNonce, setStreamNonce] = useState(0)
 
   const { attendanceRecording, updateAttendanceRecording } = useApp()
   const videoRef = useRef(null)
@@ -488,7 +505,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
     setStreamReady(false)
   }, [])
 
-  const startStream = useCallback(async () => {
+  const startStream = useCallback(async (facingOverride) => {
     stopStream()
     setFailed(false)
     setFailReason('')
@@ -498,10 +515,11 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
         throw new Error('Your browser does not support webcam capture.')
       }
 
+      const mode = typeof facingOverride === 'string' ? facingOverride : facing
       const constraints = {
         video: selectedDeviceId
           ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-          : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          : { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       }
 
@@ -512,6 +530,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
         videoRef.current.srcObject = stream
       }
       setStreamReady(true)
+      setStreamNonce((n) => n + 1)
 
       // Re-enumerate devices now that camera permission has been granted (labels will be populated)
       enumerateCameras()
@@ -528,7 +547,7 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
         setFailReason(err.message || 'Unable to access the device camera.')
       }
     }
-  }, [selectedDeviceId, stopStream, enumerateCameras])
+  }, [selectedDeviceId, facing, stopStream, enumerateCameras])
 
   useEffect(() => {
     startStream()
@@ -615,6 +634,14 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
   const handleDeviceChange = (deviceId) => {
     setSelectedDeviceId(deviceId)
     saveStoredSettings({ cameraDeviceId: deviceId })
+  }
+
+  const toggleFacing = () => {
+    const next = facing === 'user' ? 'environment' : 'user'
+    setFacing(next)
+    setSelectedDeviceId('')
+    saveStoredSettings({ cameraDeviceId: '' })
+    startStream(next)
   }
 
   const toggleMirror = () => {
@@ -714,10 +741,23 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
               <FlipHorizontal size={15} />
             </button>
 
+            {/* Front / back camera toggle */}
+            <button
+              type="button"
+              onClick={toggleFacing}
+              disabled={recordingBusy}
+              title={facing === 'user' ? 'Using front camera (click for back)' : 'Using back camera (click for front)'}
+              aria-label="Switch between front and back camera"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
+              <SwitchCamera size={12} />
+              {facing === 'user' ? 'Front' : 'Back'}
+            </button>
+
             {/* Reconnect */}
             <button
               type="button"
-              onClick={startStream}
+              onClick={() => startStream()}
               aria-label="Restart camera"
               title="Restart camera"
               className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
@@ -731,9 +771,10 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
               onClick={() => setFullscreen(true)}
               aria-label="Open fullscreen camera view"
               title="Fullscreen"
-              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
             >
               <Maximize2 size={15} />
+              Fullscreen
             </button>
           </div>
         </div>
@@ -813,6 +854,9 @@ export default function LiveCameraFeed({ attendanceRecords = [] }) {
           failReason={failReason}
           reconnect={startStream}
           onClose={() => setFullscreen(false)}
+          facing={facing}
+          onToggleFacing={toggleFacing}
+          streamNonce={streamNonce}
           attendanceRecords={attendanceRecords}
           detectionsRef={activeDetectionsRef}
         />
