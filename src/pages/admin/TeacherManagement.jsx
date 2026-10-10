@@ -230,7 +230,11 @@ export default function TeacherManagement() {
       return toast.error('Password must be at least 4 characters long')
     }
 
-    const sections = [...new Set(form.sections.map((s) => s.trim()).filter(Boolean))]
+    const rawSections = form.sections.map((s) => s.trim()).filter(Boolean)
+    if (rawSections.some((s) => !/(^|[^a-z])([a-e])([^a-z]|$)/i.test(s))) {
+      return toast.error('Sections must use the letters A-E (e.g. "A" or "Section A")')
+    }
+    const sections = [...new Set(rawSections)]
 
     setSaving(true)
     try {
@@ -545,7 +549,7 @@ export default function TeacherManagement() {
                       type="text"
                       value={row}
                       onChange={(e) => setSectionRow(index, e.target.value)}
-                      placeholder={index === 0 ? 'e.g. A' : 'Another section…'}
+                      placeholder={index === 0 ? 'e.g. A or Section A' : 'Another section…'}
                       className={inputCls}
                     />
                     {form.sections.length > 1 && (
