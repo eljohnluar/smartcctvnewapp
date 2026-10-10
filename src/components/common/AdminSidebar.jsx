@@ -5,13 +5,12 @@ import {
   ChevronRight,
   GraduationCap,
   LayoutDashboard,
-  LogOut,
   ScrollText,
   Settings,
   ShieldCheck,
   Users,
 } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/useAuth'
 
@@ -26,8 +25,7 @@ const adminNavItems = [
 
 export default function AdminSidebar({ mobileOpen = false, onOpen = () => {}, onClose = () => {} }) {
   const { sidebarOpen, toggleSidebar } = useApp()
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  const { user } = useAuth()
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   )
@@ -136,20 +134,6 @@ export default function AdminSidebar({ mobileOpen = false, onOpen = () => {}, on
                 ADMIN
               </span>
             </div>
-          )}
-
-          {user && (
-            <button
-              onClick={async () => {
-                await logout()
-                navigate('/login')
-              }}
-              title="Sign out of Administrator console"
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
-            >
-              <LogOut size={16} className="shrink-0" />
-              {showLabels && <span className="font-mono text-[11px]">Sign Out</span>}
-            </button>
           )}
         </div>
 

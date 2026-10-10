@@ -6,12 +6,11 @@ import {
   ChevronRight,
   GraduationCap,
   LayoutDashboard,
-  LogOut,
   Settings as SettingsIcon,
   Users,
   Video,
 } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
 
 const navItems = [
@@ -28,8 +27,7 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   )
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  const { user } = useAuth()
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)')
@@ -40,11 +38,6 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
 
   // The collapse affordance is desktop-only; the mobile drawer is always full width.
   const showLabels = !collapsed || !isDesktop
-
-  const handleSignOut = () => {
-    logout()
-    navigate('/login', { replace: true })
-  }
 
   return (
     <>
@@ -110,10 +103,10 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
           ))}
         </nav>
 
-        {/* Teacher + sign out */}
+        {/* Teacher account badge */}
         <div className="border-t border-slate-200 p-3">
           {showLabels && user && (
-            <div className="mb-2 flex items-center gap-2.5 px-2">
+            <div className="flex items-center gap-2.5 px-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
                 {(user.full_name || user.username || 'T')[0]?.toUpperCase()}
               </div>
@@ -128,18 +121,6 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
               </div>
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              handleSignOut()
-              onClose()
-            }}
-            title="Sign out"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600"
-          >
-            <LogOut size={16} className="shrink-0" />
-            {showLabels && <span>Sign out</span>}
-          </button>
         </div>
 
         {/* Collapse toggle (desktop only) */}

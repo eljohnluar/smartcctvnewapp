@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock, UserRound } from 'lucide-react'
+import { Clock, LogOut, UserRound } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 
 export default function Header({ title }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const menuRef = useRef(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -82,6 +82,19 @@ export default function Header({ title }) {
               >
                 <UserRound size={14} className="text-emerald-600" />
                 See profile
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  logout()
+                  navigate('/login', { replace: true })
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50"
+              >
+                <LogOut size={14} />
+                Sign out
               </button>
             </div>
           )}

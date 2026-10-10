@@ -44,6 +44,7 @@ const adminTitles = {
   '/admin/attendance': 'Attendance Oversight',
   '/admin/audit': 'Audit Log',
   '/admin/settings': 'Administrator Settings',
+  '/profile': 'My Profile',
   '/credits': 'System Credits & Research Team',
 }
 
@@ -72,6 +73,7 @@ function AdminLayout() {
             <Route path="/admin/attendance" element={<AdminAttendance />} />
             <Route path="/admin/audit" element={<AuditLog />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/credits" element={<Credits />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
