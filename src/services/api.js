@@ -77,10 +77,29 @@ export const setAttendanceRecording = (enabled) => api.post('/camera/attendance-
 export const testVoiceAnnouncement = () => api.post('/camera/test-voice')
 
 // ── System Settings ───────────────────────────────────────────────────────────
+export const getUniformPolicy = () => api.get('/settings/uniform-policy')
+export const updateUniformPolicy = (uniform_colors, password) =>
+  api.put('/settings/uniform-policy', { uniform_colors }, { headers: confirmHeaders(password) })
+
+export const getVoiceSettings = () => api.get('/settings/voice')
+export const updateVoiceSettings = (voice_gender, password) =>
+  api.put('/settings/voice', { voice_gender }, { headers: confirmHeaders(password) })
+
 export const getGestureAttendanceSettings = () => api.get('/settings/gesture-attendance')
+export const updateGestureAttendanceSettings = (gesture_attendance_enabled, password) =>
+  api.put('/settings/gesture-attendance', { gesture_attendance_enabled }, { headers: confirmHeaders(password) })
+
+export const getRuntimeControls = () => api.get('/settings/runtime-controls')
+export const updateRuntimeControls = (data, password) =>
+  api.put('/settings/runtime-controls', data, { headers: confirmHeaders(password) })
+
 export const getScheduleSettings = () => api.get('/settings/schedule')
 export const updateScheduleSettings = (data, password) =>
   api.put('/settings/schedule', data, { headers: confirmHeaders(password) })
+
+// ── Administrator Console ─────────────────────────────────────────────────────
+export const getTeacherAccounts = (params) => api.get('/admin/teachers', { params })
+export const getAdminSummary = () => api.get('/admin/summary')
 
 export default api
 

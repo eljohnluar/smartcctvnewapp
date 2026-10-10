@@ -11,6 +11,8 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Students from './pages/Students'
 import LiveCamera from './pages/LiveCamera'
+import Settings from './pages/Settings'
+import AdminSettings from './pages/admin/AdminSettings'
 
 const Reports = lazy(() => import('./pages/Reports'))
 
@@ -19,6 +21,8 @@ const pageTitles = {
   '/students': 'Students',
   '/reports': 'Reports',
   '/live': 'Live Camera Feed',
+  '/settings': 'Settings & Configuration',
+  '/admin/settings': 'Administrator Settings',
 }
 
 function AppLayout() {
@@ -34,6 +38,11 @@ function AppLayout() {
     return <Navigate to="/login" replace />
   }
 
+  const defaultPortalTitle =
+    user?.role === 'admin' || user?.role === 'administrator'
+      ? 'Administrator portal'
+      : 'Teacher portal'
+
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar
@@ -42,7 +51,7 @@ function AppLayout() {
         onClose={() => setMobileNavOpen(false)}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Header title={pageTitles[location.pathname] ?? 'Teacher portal'} />
+        <Header title={pageTitles[location.pathname] ?? defaultPortalTitle} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -56,6 +65,8 @@ function AppLayout() {
                 </Suspense>
               }
             />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

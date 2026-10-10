@@ -6,6 +6,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  Settings as SettingsIcon,
   Users,
   Video,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/live', label: 'Live Feed', icon: Video },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 
 export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose = () => {} }) {
@@ -67,7 +69,7 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
                 SmartCCTV
               </p>
               <p className="whitespace-nowrap text-[11px] font-medium text-slate-500">
-                Teacher portal
+                {user?.role === 'admin' ? 'Administrator portal' : 'Teacher portal'}
               </p>
             </div>
           )}
@@ -113,9 +115,14 @@ export default function Sidebar({ mobileOpen = false, onOpen = () => {}, onClose
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">
                 {(user.full_name || user.username || 'T')[0]?.toUpperCase()}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-slate-900">{user.full_name}</p>
-                <p className="truncate text-[11px] text-slate-500">{user.username}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-[11px] text-slate-500">{user.username}</p>
+                  <span className="rounded bg-emerald-50 border border-emerald-200 px-1 text-[9px] font-semibold uppercase text-emerald-700">
+                    {user.role}
+                  </span>
+                </div>
               </div>
             </div>
           )}

@@ -32,7 +32,9 @@ export function AuthProvider({ children }) {
 
       if (!data) throw new Error('Invalid username or password.')
       if (!data.is_active) throw new Error('This account has been deactivated.')
-      if (data.role !== 'teacher') throw new Error('This portal is for teachers only.')
+      if (data.role !== 'teacher' && data.role !== 'admin' && data.role !== 'administrator') {
+        throw new Error('This portal is for teachers and administrators only.')
+      }
 
       const candidateHash = await hashPassword(password)
       if (candidateHash !== data.password_hash) {
