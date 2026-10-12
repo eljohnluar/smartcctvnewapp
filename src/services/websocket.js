@@ -66,6 +66,7 @@ class WSClient {
       this.ws.onopen = () => {
         this._emit('open', null)
         clearTimeout(this.reconnectTimer)
+        this.reconnectDelay = 3000
       }
 
       this.ws.onmessage = (event) => {
@@ -86,7 +87,10 @@ class WSClient {
       this.ws.onclose = () => {
         this._emit('close', null)
         if (this.shouldReconnect) {
+          // A sleeping Render instance rejects every attempt; back off so the
+          // console and network stay quiet until it wakes (3s → 60s max).
           this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay)
+          this.reconnectDelay = Math.min(this.reconnectDelay * 2, 60000)
         }
       }
     } catch {
