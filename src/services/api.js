@@ -27,10 +27,25 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Global error handler — unwraps FastAPI detail strings/arrays into a single message
+// Global error handler — unwraps FastAPI detail strings/arrays into a single message.
+// A timed-out first request still wakes Render's sleeping free instance, so retry
+// once with a longer budget instead of surfacing cold-start delays as errors.
 api.interceptors.response.use(
   (response) => response.data,
-  (error) => {
+  async (error) => {
+    const config = error.config
+    const isTimeout =
+      error.code === 'ECONNABORTED' || /timeout|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|Network Error/i.test(error.message || '')
+    if (config && isTimeout && !config.__retriedAfterWake) {
+      config.__retriedAfterWake = true
+      config.timeout = 90000
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      try {
+        return await api.request(config)
+      } catch (retryError) {
+        error = retryError
+      }
+    }
     let message = 'Request failed'
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') {
@@ -46,7 +61,9 @@ api.interceptors.response.use(
     } else if (detail && typeof detail === 'object') {
       message = detail.msg || JSON.stringify(detail)
     } else if (error.message) {
-      message = error.message
+      message = /timeout|ETIMEDOUT|Network Error/i.test(error.message)
+        ? 'The server took too long to respond. It may be waking up — please try again.'
+        : error.message
     }
     return Promise.reject(new Error(message))
   },
