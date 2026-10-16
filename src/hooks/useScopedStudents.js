@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchRoster } from '../services/data'
 import { useAuth } from '../context/useAuth'
+import { assignableSections } from '../utils/constants'
 
 /** The students registered with the signed-in teacher, and nobody else's. */
 export function useScopedStudents() {
@@ -16,7 +17,8 @@ export function useScopedStudents() {
       return
     }
     try {
-      setStudents(await fetchRoster(user.id))
+      const assigned = assignableSections(user?.year_levels, user?.sections)
+      setStudents(await fetchRoster(user.id, assigned))
       setError(null)
     } catch (err) {
       setError(err)
@@ -24,7 +26,7 @@ export function useScopedStudents() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, JSON.stringify(user?.year_levels), JSON.stringify(user?.sections)])
 
   useEffect(() => {
     fetchStudents()

@@ -34,8 +34,12 @@ export const COLLEGE_SECTIONS = YEAR_LEVELS.flatMap((year) =>
 )
 
 export function assignableSections(yearLevels, letters) {
-  if (!yearLevels?.length || !letters?.length) return []
-  const names = [...new Set(letters.map((l) => String(l).trim()).filter(Boolean))]
+  if (!yearLevels?.length) return []
+  const raw = Array.isArray(letters)
+    ? letters
+    : String(letters || '').replace(/[\[\]"]/g, '').split(',')
+  const names = [...new Set(raw.map((l) => String(l).trim()).filter(Boolean))]
+  if (!names.length) return []
   return yearLevels.flatMap((year) => names.map((letter) => sectionLabel(year, letter)))
 }
 

@@ -14,17 +14,31 @@ const PHOTO_URL_TTL = 3600
 
 /**
  * The roster registered with one teacher, in 1000-row pages (Supabase's
- * per-request cap). A teacher never receives another teacher's students.
+ * per-request cap). Fetches students assigned to the teacher by teacher_id OR
+ * belonging to the teacher's assigned sections.
  */
-export async function fetchRoster(teacherId) {
+export async function fetchRoster(teacherId, assignedSections = []) {
   let all = []
   let from = 0
   const pageSize = 1000
+  const validSections = (assignedSections || []).filter(Boolean)
+
   for (;;) {
-    const { data, error } = await supabase
-      .from('students')
-      .select(STUDENT_COLUMNS)
-      .eq('teacher_id', teacherId)
+    let query = supabase.from('students').select(STUDENT_COLUMNS)
+
+    if (validSections.length > 0 && teacherId) {
+      const sectionFilter = validSections.map((s) => `"${s.replace(/"/g, '""')}"`).join(',')
+      query = query.or(`teacher_id.eq.${teacherId},section.in.(${sectionFilter})`)
+    } else if (teacherId) {
+      query = query.eq('teacher_id', teacherId)
+    } else if (validSections.length > 0) {
+      const sectionFilter = validSections.map((s) => `"${s.replace(/"/g, '""')}"`).join(',')
+      query = query.filter('section', 'in', `(${sectionFilter})`)
+    } else {
+      break
+    }
+
+    const { data, error } = await query
       .order('full_name')
       .range(from, from + pageSize - 1)
     if (error) throw error
@@ -33,7 +47,15 @@ export async function fetchRoster(teacherId) {
     if (rows.length < pageSize) break
     from += pageSize
   }
-  return withPhotoUrls(all)
+
+  // Deduplicate by student id
+  const seen = new Set()
+  const unique = all.filter((s) => {
+    if (seen.has(s.id)) return false
+    seen.add(s.id)
+    return true
+  })
+  return withPhotoUrls(unique)
 }
 
 /**

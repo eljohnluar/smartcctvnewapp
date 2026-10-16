@@ -107,12 +107,13 @@ export default function AdminStudents() {
 
   const openEdit = (student) => {
     setEditing(student)
+    const sectionMatch = (student.section || '').match(/Section\s*[-–]?\s*(.+)$/i)
     setForm({
       student_id: student.student_id || '',
       full_name: student.full_name || '',
       teacher_id: student.teacher_id != null ? String(student.teacher_id) : '',
       year: yearLevelOfSection(student.section),
-      letter: (student.section || '').match(/Section\s+([A-Za-z])/)?.[1].toUpperCase() ?? '',
+      letter: sectionMatch ? sectionMatch[1].trim() : '',
     })
     setFormOpen(true)
   }
