@@ -36,10 +36,13 @@ api.interceptors.response.use(
     const config = error.config
     const isTimeout =
       error.code === 'ECONNABORTED' || /timeout|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|Network Error/i.test(error.message || '')
-    if (config && isTimeout && !config.__retriedAfterWake) {
+    const isColdStart = error.response?.status === 503
+    if (config && (isTimeout || isColdStart) && !config.__retriedAfterWake) {
       config.__retriedAfterWake = true
       config.timeout = 90000
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      // 503 cold-starts need a slightly longer wait than plain timeouts before
+      // Render's instance finishes booting.
+      await new Promise((resolve) => setTimeout(resolve, isColdStart ? 5000 : 3000))
       try {
         return await api.request(config)
       } catch (retryError) {
@@ -60,6 +63,8 @@ api.interceptors.response.use(
         .join('; ')
     } else if (detail && typeof detail === 'object') {
       message = detail.msg || JSON.stringify(detail)
+    } else if (error.response?.status === 503) {
+      message = 'The server is waking up. Please wait a moment and try again.'
     } else if (error.message) {
       message = /timeout|ETIMEDOUT|Network Error/i.test(error.message)
         ? 'The server took too long to respond. It may be waking up — please try again.'
