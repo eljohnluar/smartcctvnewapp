@@ -143,6 +143,15 @@ export default function AdminStudents() {
     if (!name || !code || !form.teacher_id || !form.year || !form.letter) {
       return toast.error('Name, student number, teacher, year level and section are required')
     }
+
+    // Pre-flight: reject duplicates before the password confirm modal opens
+    if (!editing) {
+      const duplicate = students.find((s) => s.student_id.trim().toLowerCase() === code.toLowerCase())
+      if (duplicate) {
+        return toast.error(`Student ID "${code}" is already enrolled as ${duplicate.full_name} (${duplicate.section}). Each student ID must be unique.`)
+      }
+    }
+
     const section = sectionLabel(form.year, form.letter)
     const payload = { full_name: name, student_id: code, section, teacher_id: Number(form.teacher_id) }
 
