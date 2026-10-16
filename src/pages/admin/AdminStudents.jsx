@@ -61,6 +61,11 @@ export default function AdminStudents() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  // When non-null, the modal has moved past the form fields into the password step
+  const [confirmStep, setConfirmStep] = useState(null) // { payload, name, code, section, teacherName }
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [confirmError, setConfirmError] = useState('')
+
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -102,6 +107,9 @@ export default function AdminStudents() {
   const openCreate = () => {
     setEditing(null)
     setForm(EMPTY_FORM)
+    setConfirmStep(null)
+    setConfirmPassword('')
+    setConfirmError('')
     setFormOpen(true)
   }
 
@@ -115,6 +123,9 @@ export default function AdminStudents() {
       year: yearLevelOfSection(student.section),
       letter: sectionMatch ? sectionMatch[1].trim() : '',
     })
+    setConfirmStep(null)
+    setConfirmPassword('')
+    setConfirmError('')
     setFormOpen(true)
   }
 
@@ -144,39 +155,59 @@ export default function AdminStudents() {
       return toast.error('Name, student number, teacher, year level and section are required')
     }
 
-    // Pre-flight: reject duplicates before the password confirm modal opens
     if (!editing) {
+      // Pre-flight duplicate check
       const duplicate = students.find((s) => s.student_id.trim().toLowerCase() === code.toLowerCase())
       if (duplicate) {
         return toast.error(`Student ID "${code}" is already enrolled as ${duplicate.full_name} (${duplicate.section}). Each student ID must be unique.`)
       }
+      // Transition the modal body to the password step — no second modal opens
+      const section = sectionLabel(form.year, form.letter)
+      setConfirmStep({
+        payload: { full_name: name, student_id: code, section, teacher_id: Number(form.teacher_id) },
+        name,
+        code,
+        section,
+        teacherName: teacherNames.get(form.teacher_id) || '',
+      })
+      setConfirmPassword('')
+      setConfirmError('')
+      return
     }
 
+    // Edit path — no password required
     const section = sectionLabel(form.year, form.letter)
     const payload = { full_name: name, student_id: code, section, teacher_id: Number(form.teacher_id) }
-
     setSaving(true)
     try {
-      if (editing) {
-        const updated = await updateStudent(editing.id, payload)
-        setStudents((prev) => prev.map((s) => (s.id === editing.id ? updated : s)))
-        toast.success('Student updated')
-      } else {
-        const done = await confirm((password) => createStudent(payload, password), {
-          title: 'Confirm new student',
-          description: `Adding ${name} (${code}) to ${section} under ${teacherNames.get(form.teacher_id)} requires your password.`,
-          confirmLabel: 'Add student',
-        })
-        if (!done) {
-          setSaving(false)
-          return
-        }
-        toast.success(`Student ${code} enrolled`)
-        await load()
-      }
+      const updated = await updateStudent(editing.id, payload)
+      setStudents((prev) => prev.map((s) => (s.id === editing.id ? updated : s)))
+      toast.success('Student updated')
       setFormOpen(false)
     } catch (err) {
-      toast.error(err.message || 'Failed to save student')
+      toast.error(err.message || 'Failed to update student')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Password step submit — calls the API with the entered password
+  const handleConfirmSubmit = async (e) => {
+    e.preventDefault()
+    if (!confirmPassword.trim()) {
+      setConfirmError('Please enter your password.')
+      return
+    }
+    setSaving(true)
+    setConfirmError('')
+    try {
+      await createStudent(confirmStep.payload, confirmPassword)
+      toast.success(`Student ${confirmStep.code} enrolled`)
+      await load()
+      setFormOpen(false)
+      setConfirmStep(null)
+    } catch (err) {
+      setConfirmError(err.message || 'Failed to add student. Check your password and try again.')
     } finally {
       setSaving(false)
     }
@@ -332,104 +363,166 @@ export default function AdminStudents() {
         )}
       </div>
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? 'Edit student' : 'New student'} size="md">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Full name</label>
-              <input
-                type="text"
-                value={form.full_name}
-                onChange={(e) => setField('full_name', e.target.value)}
-                placeholder="e.g. Maria Santos"
-                className={inputCls}
-                required
-              />
+      <Modal
+        open={formOpen}
+        onClose={() => { setFormOpen(false); setConfirmStep(null) }}
+        title={confirmStep ? 'Confirm new student' : editing ? 'Edit student' : 'New student'}
+        size="md"
+      >
+        {/* ── Step 2: password confirmation ── */}
+        {confirmStep ? (
+          <form onSubmit={handleConfirmSubmit} className="space-y-5">
+            {/* Summary of what will be saved */}
+            <div className="rounded-lg border border-[#2d3148] bg-[#242836] px-4 py-3 space-y-1">
+              <p className="text-xs text-slate-400">You are enrolling:</p>
+              <p className="text-sm font-semibold text-slate-100">{confirmStep.name} <span className="font-normal text-slate-400">({confirmStep.code})</span></p>
+              <p className="text-xs text-slate-400">
+                Section: <span className="text-cyan-300">{confirmStep.section}</span>
+                {confirmStep.teacherName && <> · Teacher: <span className="text-cyan-300">{confirmStep.teacherName}</span></>}
+              </p>
             </div>
+
             <div>
-              <label className={labelCls}>Student number</label>
+              <label className={labelCls}>Enter your password to confirm</label>
               <input
-                type="text"
-                value={form.student_id}
-                onChange={(e) => setField('student_id', e.target.value)}
-                placeholder="e.g. STU-001"
+                type="password"
+                autoFocus
+                value={confirmPassword}
+                onChange={(e) => { setConfirmPassword(e.target.value); setConfirmError('') }}
+                placeholder="Your account password"
                 className={inputCls}
-                required
               />
+              {confirmError && (
+                <p className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{confirmError}</p>
+              )}
             </div>
-          </div>
-          {teachers.length === 0 ? (
-            <p className="text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2">
-              No teachers have year levels and sections assigned yet. Set those up in Teacher Management first.
-            </p>
-          ) : (
-            <>
+
+            <div className="flex justify-between items-center pt-1">
+              <button
+                type="button"
+                onClick={() => { setConfirmStep(null); setConfirmError('') }}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                ← Back
+              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setFormOpen(false); setConfirmStep(null) }}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-cyan-400 text-black rounded-lg hover:bg-cyan-300 disabled:opacity-50 transition-colors"
+                >
+                  <UserRound size={14} />{saving ? 'Enrolling…' : 'Add student'}
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : (
+          /* ── Step 1: student details form ── */
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className={labelCls}>Class teacher</label>
-                <select
-                  value={form.teacher_id}
-                  onChange={(e) => handleTeacherChange(e.target.value)}
+                <label className={labelCls}>Full name</label>
+                <input
+                  type="text"
+                  value={form.full_name}
+                  onChange={(e) => setField('full_name', e.target.value)}
+                  placeholder="e.g. Maria Santos"
                   className={inputCls}
                   required
-                >
-                  <option value="">Select a teacher…</option>
-                  {teachers.map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.full_name} — {yearsOf(teacher).map((y) => y.replace(' Year', '')).join('/')} {lettersOf(teacher).join(', ')}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Student number</label>
+                <input
+                  type="text"
+                  value={form.student_id}
+                  onChange={(e) => setField('student_id', e.target.value)}
+                  placeholder="e.g. STU-001"
+                  className={inputCls}
+                  required
+                />
+              </div>
+            </div>
+            {teachers.length === 0 ? (
+              <p className="text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2">
+                No teachers have year levels and sections assigned yet. Set those up in Teacher Management first.
+              </p>
+            ) : (
+              <>
                 <div>
-                  <label className={labelCls}>Year level</label>
+                  <label className={labelCls}>Class teacher</label>
                   <select
-                    value={form.year}
-                    onChange={(e) => setField('year', e.target.value)}
+                    value={form.teacher_id}
+                    onChange={(e) => handleTeacherChange(e.target.value)}
                     className={inputCls}
-                    disabled={!selectedTeacher}
                     required
                   >
-                    <option value="">{selectedTeacher ? 'Select a year level…' : 'Pick a teacher first'}</option>
-                    {yearOptions.map((year) => (
-                      <option key={year} value={year}>{year}</option>
+                    <option value="">Select a teacher…</option>
+                    {teachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.full_name} — {yearsOf(teacher).map((y) => y.replace(' Year', '')).join('/')} {lettersOf(teacher).join(', ')}
+                      </option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className={labelCls}>Section</label>
-                  <select
-                    value={form.letter}
-                    onChange={(e) => setField('letter', e.target.value)}
-                    className={inputCls}
-                    disabled={!selectedTeacher}
-                    required
-                  >
-                    <option value="">{selectedTeacher ? 'Select a section…' : 'Pick a teacher first'}</option>
-                    {letterOptions.map((letter) => (
-                      <option key={letter} value={letter}>Section {letter}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Year level</label>
+                    <select
+                      value={form.year}
+                      onChange={(e) => setField('year', e.target.value)}
+                      className={inputCls}
+                      disabled={!selectedTeacher}
+                      required
+                    >
+                      <option value="">{selectedTeacher ? 'Select a year level…' : 'Pick a teacher first'}</option>
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Section</label>
+                    <select
+                      value={form.letter}
+                      onChange={(e) => setField('letter', e.target.value)}
+                      className={inputCls}
+                      disabled={!selectedTeacher}
+                      required
+                    >
+                      <option value="">{selectedTeacher ? 'Select a section…' : 'Pick a teacher first'}</option>
+                      {letterOptions.map((letter) => (
+                        <option key={letter} value={letter}>Section {letter}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-              {form.year && form.letter && (
-                <p className="text-[11px] text-slate-500">Enrolls in <span className="text-cyan-300">{sectionLabel(form.year, form.letter)}</span></p>
-              )}
-            </>
-          )}
-          <p className="flex items-center gap-2 text-[11px] text-slate-500">
-            <UserRound size={13} />
-            Face enrollment is done by the class teacher from their Students page.
-          </p>
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setFormOpen(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-cyan-400 text-black rounded-lg hover:bg-cyan-300 disabled:opacity-50 transition-colors">
-              <UserRound size={14} />{saving ? 'Saving…' : editing ? 'Save changes' : 'Enroll student'}
-            </button>
-          </div>
-        </form>
+                {form.year && form.letter && (
+                  <p className="text-[11px] text-slate-500">Enrolls in <span className="text-cyan-300">{sectionLabel(form.year, form.letter)}</span></p>
+                )}
+              </>
+            )}
+            <p className="flex items-center gap-2 text-[11px] text-slate-500">
+              <UserRound size={13} />
+              Face enrollment is done by the class teacher from their Students page.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setFormOpen(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-cyan-400 text-black rounded-lg hover:bg-cyan-300 disabled:opacity-50 transition-colors">
+                <UserRound size={14} />{saving ? 'Saving…' : editing ? 'Save changes' : 'Next →'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   )
